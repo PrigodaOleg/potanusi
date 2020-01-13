@@ -1,0 +1,7 @@
+name: b
+takes:
+  hw_interface:
+    type: ti_controller_1_gpio_hw_interface_version_1
+gives:
+  sw_interface:
+    type: gpio_driver

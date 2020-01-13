@@ -1,0 +1,5 @@
+{
+  "name": "blink_led",
+  "takes": {"sw_interface_0": "gpio_driver", "sw_interface_1": "hw_mux_driver"},
+  "gives": {"application":  {"type": "application"}}
+}

@@ -1,0 +1,8 @@
+name: a
+version: 1.2.3
+takes:
+  hw_interface:
+    type: ti_controller_1_mux_hw_interface_version_1
+gives:
+  sw_interface:
+    type: hw_mux_driver

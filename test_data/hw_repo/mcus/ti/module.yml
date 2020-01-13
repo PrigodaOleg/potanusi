@@ -1,0 +1,136 @@
+name: controller_1
+version: 1.0
+constraints:
+  physical_pin:
+    voltage: 0..5
+    current: 0..10
+  gpio_in:
+gives:
+
+  # Physical pins
+  pin_0:
+    type: physical_pin
+    index: 0
+    reciprocal:
+      hw_mux_out:
+        index: 0
+      gpio_in:
+        index: 0
+  pin_1:
+    type: physical_pin
+    index: 1
+    reciprocal:
+      hw_mux_out:
+        index: 1
+      gpio_in:
+        index: 1
+      uatr_rx:
+        index: 0
+  pin_2:
+    type: physical_pin
+    index: 2
+    reciprocal:
+      adc_in:
+        index: 0
+
+  # Hardware modules
+  hw_mux_0:
+    type: module
+    name: hw_module_mux
+    index: 0
+    takes:
+      physical_pin:
+        type: physical_pin
+        index: 0
+    gives:
+      hw_interface:
+        type: ti_controller_1_mux_hw_interface_version_1
+      gpio_out:
+        type: gpio_out
+        index: 0
+      uart_tx:
+        type: uart_tx
+        index: 0
+
+  hw_mux_1:
+    type: module
+    name: hw_module_mux
+    index: 1
+    takes:
+      physical_pin:
+        type: physical_pin
+        index: 0
+    gives:
+      hw_interface:
+        type: ti_controller_1_mux_hw_interface_version_1
+      gpio_out:
+        type: gpio_out
+        index: 1
+
+  gpio_0:
+    type: module
+    name: hw_module_gpio
+    index: 0
+    takes:
+      gpio_in_0:
+        type: gpio_in
+        index: 0
+      gpio_in_1:
+        type: gpio_in
+        index: 1
+      gpio_out_0:
+        type: gpio_out
+        index: 0
+      gpio_out_1:
+        type: gpio_out
+        index: 1
+    gives:
+      hw_interface:
+        type: ti_controller_1_gpio_hw_interface_version_1
+
+  uart_0:
+    type: module
+    name: hw_module_uart
+    index: 0
+    takes:
+      uart_rx:
+        type: uart_rx
+        index: 0
+      uart_tx:
+        type: uart_tx
+        index: 0
+    gives:
+      hw_interface:
+        type: ti_controller_1_uart_hw_interface_version_1
+
+  adc_0:
+    type: module
+    name: hw_module_adc
+    index: 0
+    takes:
+      adc_in_0:
+        type: adc_in
+        index: 0
+    gives:
+      hw_interface:
+        type: ti_controller_1_adc_hw_interface_version_1
+
+takes:
+  pin_0:
+    type: physical_pin
+    index: 0
+    internal_link: pin_0
+  pin_1:
+    type: physical_pin
+    index: 1
+    internal_link: pin_1
+  pin_2:
+    type: physical_pin
+    index: 2
+    internal_link: pin_2
+  pin_3:
+    type: gnd
+    index: 0
+  pin_4:
+    type: vcc
+    index: 0
