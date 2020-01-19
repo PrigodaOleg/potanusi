@@ -3,7 +3,8 @@ A simple tool to create an electronic control system.
 
 # todo:
 - parsing
-    - internal links
+    - check errors in yaml
+    - tests
 - connecting
     - connecting of nested modules
     - connecting of pins

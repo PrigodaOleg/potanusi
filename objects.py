@@ -7,6 +7,8 @@ reciprocal_synonyms = ['reciprocal']
 name_synonyms = ['name']
 type_synonyms = ['type']
 module_synonyms = ['module']
+link_synonyms = ['link', 'links']
+index_synonyms = ['index']
 
 
 def first_intersection(a, b):
@@ -22,17 +24,20 @@ class Pin:
     def parse(cls, name, parent_module, descriptor):
         parameters = {}
         reciprocal = {}
+        links = []
         if descriptor:
-            for pin_attribute_name, pin_attribute_value in descriptor.items():
-                # print('        ', pin_attribute_name, pin_attribute_value)
-                if pin_attribute_name in name_synonyms:
-                    name = pin_attribute_value
-                elif pin_attribute_name in reciprocal_synonyms:
-                    reciprocal = pin_attribute_value
-                elif 'link' in pin_attribute_name:
-                    pass
-                else:
-                    parameters[pin_attribute_name] = pin_attribute_value
+            if type(descriptor) == str:
+                links.append(descriptor)
+            else:
+                for pin_attribute_name, pin_attribute_value in descriptor.items():
+                    if pin_attribute_name in name_synonyms:
+                        name = pin_attribute_value
+                    elif pin_attribute_name in reciprocal_synonyms:
+                        reciprocal = pin_attribute_value
+                    elif pin_attribute_name in link_synonyms:
+                        links.append(pin_attribute_value)
+                    else:
+                        parameters[pin_attribute_name] = pin_attribute_value
 
         type_synonym = first_intersection(type_synonyms, parameters)
         if not type_synonym:
@@ -40,8 +45,10 @@ class Pin:
             listed_name = name.split('_')
             if listed_name[-1].isdigit():
                 parameters[type_synonym] = '_'.join(listed_name[:-1])
-                if 'index' not in parameters:
-                    parameters['index'] = int(listed_name[-1])
+                index_synonym = first_intersection(index_synonyms, parameters)
+                if not index_synonym:
+                    index_synonym = index_synonyms[0]
+                    parameters[index_synonym] = int(listed_name[-1])
             else:
                 parameters[type_synonym] = name
         if parameters[type_synonym] in parent_module.constraints:
@@ -50,6 +57,7 @@ class Pin:
         pin = cls(parent_module, parameters)
         pin.name = name
         pin.reciprocal = reciprocal
+        pin.links = links
         return pin
 
     def __init__(self, module, parameters={}):
@@ -74,41 +82,43 @@ class Pin:
 
 
 class Module:
+    parse_recurse_deep_counter = 0
     @classmethod
     def parse(cls, parent, path, descriptor):
+        cls.parse_recurse_deep_counter += 1
+
+        links = {}
         items = descriptor.items()
         module = cls(parent, None, path)
         for attribute_name, attribute_value in items:
             type_synonym = first_intersection(type_synonyms, attribute_value)
             if attribute_name in name_synonyms:
                 module.name = attribute_value
-                # print(attribute_value)
             elif type_synonym and attribute_value[type_synonym] in module_synonyms:
                 # Module in root
                 module.children.append(cls.parse(module, path + ':' + attribute_name, attribute_value))
             elif attribute_name in takes_synonyms:
                 for take_name, take_value in attribute_value.items():
-                    # print('    ', take_name, take_value)
                     type_synonym = first_intersection(type_synonyms, take_value)
                     if type_synonym and take_value[type_synonym] in module_synonyms:
                         # Element is module, parse it recursively
                         module.children.append(cls.parse(module, path + ':' + take_name, take_value))
                     else:
                         # Element is pin, parse it
-                        module.pins.append(Pin.parse(take_name, module, take_value))
+                        module.take_pins[take_name] = Pin.parse(take_name, module, take_value)
             elif attribute_name in gives_synonyms:
                 for give_name, give_value in attribute_value.items():
-                    # print('    ', give_name, give_value)
                     type_synonym = first_intersection(type_synonyms, give_value)
                     if type_synonym and give_value[type_synonym] in module_synonyms:
                         # Element is module, parse it recursively
                         module.children.append(cls.parse(module, path + ':' + give_name, give_value))
                     else:
                         # Element is pin, parse it
-                        module.pins.append(Pin.parse(give_name, module, give_value))
-
+                        module.give_pins[give_name] = Pin.parse(give_name, module, give_value)
             elif attribute_name in constraints_synonyms:
                 module.constraints.update(attribute_value)
+            elif attribute_name in link_synonyms:
+                links.update(attribute_value)
             else:
                 type_synonym = first_intersection(type_synonyms, attribute_value)
                 if type_synonym in module_synonyms:
@@ -116,28 +126,66 @@ class Module:
                     module.children.append(cls.parse(module, path + ':' + attribute_name, attribute_value))
                 else:
                     module.attributes[attribute_name] = attribute_value
+        # Resolve links
+        for give_pin_name in module.give_pins:
+            for link_pin_name in module.give_pins[give_pin_name].links:
+                if link_pin_name in module.take_pins:
+                    module.links[module.give_pins[give_pin_name]] = module.take_pins[link_pin_name]
+                    module.links[module.take_pins[link_pin_name]] = module.give_pins[give_pin_name]
+                else:
+                    # Link error, no such pin
+                    print('\nLink error, no such pin:', link_pin_name, '\n')
+        for take_pin_name in module.take_pins:
+            for link_pin_name in module.take_pins[take_pin_name].links:
+                if link_pin_name in module.give_pins:
+                    module.links[module.take_pins[take_pin_name]] = module.give_pins[link_pin_name]
+                    module.links[module.give_pins[link_pin_name]] = module.take_pins[take_pin_name]
+                else:
+                    # Link error, no such pin
+                    print('\nLink error, no such pin:', link_pin_name, '\n')
+        for take_pin_name in links:
+            if take_pin_name in module.take_pins:
+                if type(links[take_pin_name]) and links[take_pin_name] in module.give_pins:
+                    module.links[module.take_pins[take_pin_name]] = module.give_pins[links[take_pin_name]]
+                    module.links[module.give_pins[links[take_pin_name]]] = module.take_pins[take_pin_name]
+                else:
+                    # Link error, no such pin
+                    print('\nLink error, no such pin:', module.links[take_pin_name], '\n')
+            else:
+                # Link error, no such pin
+                print('\nLink error, no such pin:', take_pin_name, '\n')
+
+        cls.parse_recurse_deep_counter -= 1
+        if cls.parse_recurse_deep_counter == 0:
+            # Root module post parse actions
+            pass
         return module
 
     def __init__(self, parent, name, path):
         self.parent = parent
         self.name = name
         self.path = path
-        self.pins = []
+        self.take_pins = {}
+        self.give_pins = {}
         self.attributes = {}
         self.children = []
         self.constraints = {}
         self.links = {}
 
     def __str__(self):
-        return self.__repr__()
-
-    def __repr__(self):
         repr = '\nModule {}: name: {}, attributes: {}'.format(self.path, self.name, self.attributes)
-        for pin in self.pins:
-            repr += '\n    ' + str(pin)
+        for pin in self.give_pins:
+            repr += '\n    ' + str(self.give_pins[pin])
+        for pin in self.take_pins:
+            repr += '\n    ' + str(self.take_pins[pin])
+        for link in self.links:
+            repr += '\n        Link: ' + link.name + ' - ' + self.links[link].name
         for child in self.children:
             repr += '\n    ' + str(child)
         return repr
+
+    def __repr__(self):
+        return self.__str__()
 
     def connect(self, module):
         pass

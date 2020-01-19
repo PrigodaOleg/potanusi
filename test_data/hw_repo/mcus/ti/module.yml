@@ -8,6 +8,8 @@ constraints:
     voltage: 0..5
     current: 0..10
   gpio_in:
+links:
+  pin_2: physical_pin_2
 
 gives:
   # Physical pins
@@ -117,10 +119,7 @@ gives:
         type: ti_controller_1_adc_hw_interface_version_1
 
 takes:
-  pin_0:
-    type: physical_pin
-    index: 0
-    link: pin_0
+  physical_pin_0: pin_0
   pin_1:
     type: physical_pin
     index: 1
@@ -128,7 +127,6 @@ takes:
   pin_2:
     type: physical_pin
     index: 2
-    link: pin_2
   pin_3:
     type: gnd
     index: 0

@@ -9,7 +9,6 @@ data_repos = ['test_data/hw_repo',
 
 graph = []
 
-
 # Scanning repos for modules descriptors and parse them
 descriptors = {}
 for repo in data_repos:
