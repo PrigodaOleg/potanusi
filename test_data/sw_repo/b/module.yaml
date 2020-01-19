@@ -5,3 +5,4 @@ takes:
 gives:
   sw_interface:
     type: gpio_driver
+  test_0:

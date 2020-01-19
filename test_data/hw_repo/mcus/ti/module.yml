@@ -1,12 +1,15 @@
 name: controller_1
 version: 1.0
+test:
+  type: 'module'
+  name: 'test_name'
 constraints:
   physical_pin:
     voltage: 0..5
     current: 0..10
   gpio_in:
-gives:
 
+gives:
   # Physical pins
   pin_0:
     type: physical_pin
@@ -26,9 +29,7 @@ gives:
         index: 1
       uatr_rx:
         index: 0
-  pin_2:
-    type: physical_pin
-    index: 2
+  physical_pin_2:
     reciprocal:
       adc_in:
         index: 0
@@ -119,15 +120,15 @@ takes:
   pin_0:
     type: physical_pin
     index: 0
-    internal_link: pin_0
+    link: pin_0
   pin_1:
     type: physical_pin
     index: 1
-    internal_link: pin_1
+    link: pin_1
   pin_2:
     type: physical_pin
     index: 2
-    internal_link: pin_2
+    link: pin_2
   pin_3:
     type: gnd
     index: 0
