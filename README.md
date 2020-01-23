@@ -8,6 +8,7 @@ A simple tool to create an electronic control system.
 - connecting
     - connecting of nested modules
     - connecting of pins
+    - global synonyms for parameters
 - searching
     - all paths through several points
     - points fixation

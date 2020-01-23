@@ -1,4 +1,5 @@
 from collections.abc import Iterable
+from itertools import chain
 
 takes_synonyms = ['takes', 'take', 'consume', 'consumes']
 gives_synonyms = ['gives', 'give', 'produce', 'produces']
@@ -17,6 +18,14 @@ def first_intersection(a, b):
             if e in b:
                 return e
     return None
+
+
+def is_pins_connectable(p1, p2):
+    for parameter in p1.parameters:
+        if parameter in p2.parameters:
+            print(parameter, p1.parameters[parameter], p2.parameters[parameter])
+            return True
+    return False
 
 
 class Pin:
@@ -63,22 +72,24 @@ class Pin:
     def __init__(self, module, parameters={}):
         self.name = None
         self.module = module
-        self.connected_to = None
+        self.connected_to = []
         self.parameters = parameters
         self.reciprocal = {}
         self.links = []
 
     def __str__(self):
-        return 'Pin {}: parameters: {}'.format(self.name, self.parameters)
+        repr = 'Pin {}: parameters: {}'.format(self.name, self.parameters)
+        for connected_pin in self.connected_to:
+            repr += '\n        Connected to: {}:{}'.format(connected_pin.module.name, connected_pin.name)
+        return repr
 
     def __repr__(self):
-        return 'Pin {}: parameters: {}'.format(self.name, self.parameters)
+        return self.__str__()
 
     def connect(self, pin):
-        for parameter in self.parameters:
-            if parameter in pin.parameters:
-                self.connected_to = pin
-                pin.connected_to = self
+        if is_pins_connectable(self, pin):
+            self.connected_to.append(pin)
+            pin.connected_to.append(self)
 
 
 class Module:
@@ -158,7 +169,12 @@ class Module:
         cls.parse_recurse_deep_counter -= 1
         if cls.parse_recurse_deep_counter == 0:
             # Root module post parse actions
-            pass
+
+            # Resolve all connections with children
+            for module_a in chain(module.children, [module]):
+                for module_b in chain(module.children, [module]):
+                    if module_a != module_b:
+                        module_a.connect(module_b)
         return module
 
     def __init__(self, parent, name, path):
@@ -188,4 +204,12 @@ class Module:
         return self.__str__()
 
     def connect(self, module):
-        pass
+        print('Trying to connect module {} to {}'.format(self.name, module.name))
+        for pin in self.take_pins:
+            for pin_candidat in module.give_pins:
+                # Check all constraints
+                for pin_parameter in self.take_pins[pin].parameters:
+                    for pin_candidat_parameter in module.give_pins[pin_candidat].parameters:
+                        if pin_parameter == pin_candidat_parameter:
+                            # print('    ', pin_parameter, self.take_pins[pin].parameters[pin_parameter])
+                            self.take_pins[pin].connect(module.give_pins[pin_candidat])
