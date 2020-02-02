@@ -5,8 +5,8 @@ test:
   name: 'test_name'
 constraints:
   physical_pin:
-    voltage: 0..5
-    current: 0..10
+    voltage: =0..5
+    current: =0..10
   gpio_in:
 links:
   pin_2: physical_pin_2
@@ -18,23 +18,23 @@ gives:
     index: 0
     reciprocal:
       hw_mux_out:
-        index: 0
+        index: =0
       gpio_in:
-        index: 0
+        index: =0
   pin_1:
     type: physical_pin
     index: 1
     reciprocal:
       hw_mux_out:
-        index: 1
+        index: =1
       gpio_in:
-        index: 1
+        index: =1
       uatr_rx:
-        index: 0
+        index: =0
   physical_pin_2:
     reciprocal:
       adc_in:
-        index: 0
+        index: =0
 
   # Hardware modules
   hw_mux_0:
@@ -48,6 +48,7 @@ gives:
     gives:
       hw_interface:
         type: ti_controller_1_mux_hw_interface_version_1
+        scope: root
       gpio_out:
         type: gpio_out
         index: 0
@@ -66,6 +67,7 @@ gives:
     gives:
       hw_interface:
         type: ti_controller_1_mux_hw_interface_version_1
+        scope: root
       gpio_out:
         type: gpio_out
         index: 1
@@ -90,6 +92,7 @@ gives:
     gives:
       hw_interface:
         type: ti_controller_1_gpio_hw_interface_version_1
+        scope: root
 
   uart_0:
     type: module
@@ -105,6 +108,7 @@ gives:
     gives:
       hw_interface:
         type: ti_controller_1_uart_hw_interface_version_1
+        scope: root
 
   adc_0:
     type: module
@@ -117,6 +121,7 @@ gives:
     gives:
       hw_interface:
         type: ti_controller_1_adc_hw_interface_version_1
+        scope: root
 
 takes:
   physical_pin_0: pin_0

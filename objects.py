@@ -20,20 +20,63 @@ def first_intersection(a, b):
     return None
 
 
-def is_pins_connectable(p1, p2):
-    for parameter in p1.parameters:
-        if parameter in p2.parameters:
-            print(parameter, p1.parameters[parameter], p2.parameters[parameter])
-            return True
-    return False
+class Element:
+    @classmethod
+    def get_values_from_parameter(cls, parameter):
+        """
+        Parses the parameter values
+        There are several types of parameter values:
+            Single value:       1           gpio
+            List of values:     1 2 3
+            Diapason of values: -1..3
+            List of diapasons:  1..3 5..7
+            Mixed type:         1 3..5 7
+        There are several types of parameter constraints:
+            Single constraint: =1   ~1
+            List of single constraints: =1 =-3
+            Diapason constraint: =1..3  ~5..7
+        Values/constraints in lists have a logical relationship of "and"
+        :param: parameter: string or list to parse
+        :return: dictionary with a values and constraints
+        """
+        values = []
+        constraints = []
+        parameters = []
+        if isinstance(parameter, str):
+            if ' ' in parameter:
+                # Complex parameter
+                parameters = parameter.split(' ')
+            else:
+                # Simple parameter
+                parameters.append(parameter)
+        for param in parameters:
+            if '=' == param[0]:
+                # Value must be equal to param, or must be in diapason
+                if '..' in param:
+                    boundaries = param.split('..')
+                    constraints.append((boundaries[0][1:], boundaries[-1]))
+                else:
+                    constraints.append((param[1:]))
+            elif '~' == param[0]:
+                # Value must be not equal to param, or must be out of diapason
+                if '..' in param:
+                    boundaries = param.split('..')
+                    constraints.append([boundaries[0][1:], boundaries[-1]])
+                else:
+                    constraints.append([param[1:]])
+            else:
+                values.append(param)
+
+        return {'values': values, 'constraints': constraints}
 
 
-class Pin:
+class Pin(Element):
     @classmethod
     def parse(cls, name, parent_module, descriptor):
         parameters = {}
         reciprocal = {}
         links = []
+        scope = ''
         if descriptor:
             if type(descriptor) == str:
                 links.append(descriptor)
@@ -42,32 +85,57 @@ class Pin:
                     if pin_attribute_name in name_synonyms:
                         name = pin_attribute_value
                     elif pin_attribute_name in reciprocal_synonyms:
+                        # todo: parse
                         reciprocal = pin_attribute_value
                     elif pin_attribute_name in link_synonyms:
                         links.append(pin_attribute_value)
+                    elif pin_attribute_name == 'scope':
+                        assert isinstance(pin_attribute_value, str)
+                        scope = {'values': pin_attribute_value}
                     else:
-                        parameters[pin_attribute_name] = pin_attribute_value
+                        parameters[pin_attribute_name] = cls.get_values_from_parameter(pin_attribute_value)
 
+        # If type is unknown, get type and index from name
         type_synonym = first_intersection(type_synonyms, parameters)
         if not type_synonym:
             type_synonym = type_synonyms[0]
             listed_name = name.split('_')
             if listed_name[-1].isdigit():
-                parameters[type_synonym] = '_'.join(listed_name[:-1])
+                parameters[type_synonym] = {'values': ['_'.join(listed_name[:-1])]}
                 index_synonym = first_intersection(index_synonyms, parameters)
                 if not index_synonym:
                     index_synonym = index_synonyms[0]
-                    parameters[index_synonym] = int(listed_name[-1])
+                    parameters[index_synonym] = {'values': [int(listed_name[-1])]}
             else:
-                parameters[type_synonym] = name
-        if parameters[type_synonym] in parent_module.constraints:
-            parameters.update(parent_module.constraints[parameters[type_synonym]])
+                parameters[type_synonym] = {'values': [name]}
+
+        # Add type constraints (types must matches for connecting)
+        for type_synonym in type_synonyms:
+            if type_synonym in parameters:
+                for pin_type_name in parameters[type_synonym]['values']:
+                    if 'constraints' not in parameters[type_synonym]:
+                        parameters[type_synonym]['constraints'] = []
+                    if not parameters[type_synonym]['constraints']:
+                        parameters[type_synonym]['constraints'].append(pin_type_name)
+
+        # Add module constraints to the pin
+        for type_synonym in type_synonyms:
+            if type_synonym in parameters:
+                for pin_type_name in parameters[type_synonym]['values']:
+                    if pin_type_name in parent_module.constraints:
+                        for parameter_name in parent_module.constraints[pin_type_name]:
+                            if parameter_name not in parameters[type_synonym]:
+                                parameters[parameter_name] = {'values': [], 'constraints': []}
+                            for pin_type_value in parent_module.constraints[pin_type_name][parameter_name]['values']:
+                                parameters[parameter_name]['values'].append(pin_type_value)
+                            for pin_type_constraint in parent_module.constraints[pin_type_name][parameter_name]['constraints']:
+                                parameters[parameter_name]['constraints'].append(pin_type_constraint)
 
         pin = cls(parent_module, parameters)
         pin.name = name
         pin.reciprocal = reciprocal
         pin.links = links
-        return pin
+        return pin, scope
 
     def __init__(self, module, parameters={}):
         self.name = None
@@ -87,13 +155,67 @@ class Pin:
         return self.__str__()
 
     def connect(self, pin):
-        if is_pins_connectable(self, pin):
+        if self.is_pins_connectable(pin):
             self.connected_to.append(pin)
             pin.connected_to.append(self)
 
+    def is_pins_connectable(self, pin):
+        """
+        Checks parameters for matching.
+        :param: pin2: pin to check a connection possibility
+        :return: True/False - connection is possible / connection is not possible
+        """
+        match = False
+        pin1 = self
+        pin2 = pin
+        for _ in range(2):
+            for parameter in pin1.parameters:
+                if 'constraints' in pin1.parameters[parameter] and pin1.parameters[parameter]['constraints']:
+                    pin1_constraints = pin1.parameters[parameter]['constraints']
+                    if parameter in pin2.parameters:
+                        pin2_values = pin2.parameters[parameter]['values']
+                        # Compare values and constraints
+                        values_is_satisfied = [False] * len(pin2_values)
+                        for cnstr in pin1_constraints:
+                            constraint_is_satisfied = False
+                            constraint_index = 0
+                            for vl in pin2_values:
+                                if isinstance(cnstr, tuple):
+                                    # Value must be in diapason
+                                    # todo
+                                    pass
+                                elif isinstance(cnstr, list):
+                                    # Value must NOT be in diapason
+                                    # Diapason
+                                    # todo
+                                    pass
+                                else:
+                                    # Other type
+                                    # The value must equal to the constraint
+                                    if cnstr in vl:
+                                        values_is_satisfied[constraint_index] = True if values_is_satisfied[constraint_index] is False else False
+                                        constraint_is_satisfied = True if constraint_is_satisfied is False else False
+                                constraint_index += 1
+                            if not constraint_is_satisfied:
+                                # Constraint is not satisfied
+                                return False
+                        if False in values_is_satisfied:
+                            # At list one value out of constraints
+                            return False
+                    else:
+                        # There are not values to compare with constraints
+                        # Pins is not connectable
+                        return False
+                    # All constraints and values is satisfied
+                    match = True
+            pin2 = self
+            pin1 = pin
+        return match
 
-class Module:
+
+class Module(Element):
     parse_recurse_deep_counter = 0
+
     @classmethod
     def parse(cls, parent, path, descriptor):
         cls.parse_recurse_deep_counter += 1
@@ -116,7 +238,8 @@ class Module:
                         module.children.append(cls.parse(module, path + ':' + take_name, take_value))
                     else:
                         # Element is pin, parse it
-                        module.take_pins[take_name] = Pin.parse(take_name, module, take_value)
+                        pin, scope = Pin.parse(take_name, module, take_value)
+                        module.add_pin_to_module_by_scope(pin, scope, False)
             elif attribute_name in gives_synonyms:
                 for give_name, give_value in attribute_value.items():
                     type_synonym = first_intersection(type_synonyms, give_value)
@@ -125,9 +248,15 @@ class Module:
                         module.children.append(cls.parse(module, path + ':' + give_name, give_value))
                     else:
                         # Element is pin, parse it
-                        module.give_pins[give_name] = Pin.parse(give_name, module, give_value)
+                        pin, scope = Pin.parse(give_name, module, give_value)
+                        module.add_pin_to_module_by_scope(pin, scope, True)
             elif attribute_name in constraints_synonyms:
-                module.constraints.update(attribute_value)
+                for pin_type in attribute_value:
+                    module.constraints[pin_type] = {}
+                    if attribute_value[pin_type]:
+                        for parameter in attribute_value[pin_type]:
+                            module.constraints[pin_type][parameter] =\
+                                cls.get_values_from_parameter(attribute_value[pin_type][parameter])
             elif attribute_name in link_synonyms:
                 links.update(attribute_value)
             else:
@@ -137,6 +266,7 @@ class Module:
                     module.children.append(cls.parse(module, path + ':' + attribute_name, attribute_value))
                 else:
                     module.attributes[attribute_name] = attribute_value
+
         # Resolve links
         for give_pin_name in module.give_pins:
             for link_pin_name in module.give_pins[give_pin_name].links:
@@ -167,9 +297,9 @@ class Module:
                 print('\nLink error, no such pin:', take_pin_name, '\n')
 
         cls.parse_recurse_deep_counter -= 1
-        if cls.parse_recurse_deep_counter == 0:
-            # Root module post parse actions
 
+        # Root module post parse actions
+        if cls.parse_recurse_deep_counter == 0:
             # Resolve all connections with children
             for module_a in chain(module.children, [module]):
                 for module_b in chain(module.children, [module]):
@@ -191,9 +321,9 @@ class Module:
     def __str__(self):
         repr = '\nModule {}: name: {}, attributes: {}'.format(self.path, self.name, self.attributes)
         for pin in self.give_pins:
-            repr += '\n    ' + str(self.give_pins[pin])
+            repr += '\n    ->' + str(self.give_pins[pin])
         for pin in self.take_pins:
-            repr += '\n    ' + str(self.take_pins[pin])
+            repr += '\n    <-' + str(self.take_pins[pin])
         for link in self.links:
             repr += '\n        Link: ' + link.name + ' - ' + self.links[link].name
         for child in self.children:
@@ -206,10 +336,35 @@ class Module:
     def connect(self, module):
         print('Trying to connect module {} to {}'.format(self.name, module.name))
         for pin in self.take_pins:
-            for pin_candidat in module.give_pins:
+            for pin_candidate in module.give_pins:
                 # Check all constraints
                 for pin_parameter in self.take_pins[pin].parameters:
-                    for pin_candidat_parameter in module.give_pins[pin_candidat].parameters:
+                    for pin_candidat_parameter in module.give_pins[pin_candidate].parameters:
                         if pin_parameter == pin_candidat_parameter:
                             # print('    ', pin_parameter, self.take_pins[pin].parameters[pin_parameter])
-                            self.take_pins[pin].connect(module.give_pins[pin_candidat])
+                            self.take_pins[pin].connect(module.give_pins[pin_candidate])
+
+    def add_pin_to_module_by_scope(self, pin, scope, is_pin_give=False):
+        # Add pin to modules according scope
+        module = self
+        if is_pin_give:
+            module.give_pins[pin.name] = pin
+        else:
+            module.take_pins[pin.name] = pin
+        if scope:
+            while module:
+                if module.parent:
+                    if module.name in scope['values']:
+                        if is_pin_give:
+                            module.give_pins[pin.name] = pin
+                        else:
+                            module.take_pins[pin.name] = pin
+                        break
+                else:
+                    # It's a root module
+                    if 'root' in scope['values']:
+                        if is_pin_give:
+                            module.give_pins[pin.name] = pin
+                        else:
+                            module.take_pins[pin.name] = pin
+                module = module.parent
